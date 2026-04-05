@@ -26,6 +26,7 @@ _FS_RE = re.compile(r'FS:(\d+),(\d+)')
 _F_RE = re.compile(r'F:(\d+)')
 _PN_RE = re.compile(r'Pn:([A-Za-z]+)')
 _OV_RE = re.compile(r'Ov:(\d+),(\d+),(\d+)')
+_WCO_RE = re.compile(r'WCO:([\-\d.,]+)')
 _A_RE = re.compile(r'A:([A-Za-z]+)')
 
 _FEED_OVR_RESET     = 0x90
@@ -62,6 +63,7 @@ class WiFiGrblConnection(ConnectionBase):
         self._send_lock = threading.Lock()
         self._status_interval = 0.25
         self._response_queue: 'queue.Queue' = __import__('queue').Queue()
+        self._wco = [0.0] * 6  # Work Coordinate Offset from GRBL
 
     @property
     def connection_type(self) -> str:
@@ -287,7 +289,24 @@ class WiFiGrblConnection(ConnectionBase):
                         status['positions'][i] = float(c)
                     except ValueError:
                         pass
-            status['position_type'] = pos_type
+            # Parse WCO if present
+            wco_m = _WCO_RE.search(fields_str)
+            if wco_m:
+                wco_coords = wco_m.group(1).split(',')
+                for wi, wc in enumerate(wco_coords):
+                    if wi < 6:
+                        try:
+                            self._wco[wi] = float(wc)
+                        except ValueError:
+                            pass
+
+            # Convert MPos to WPos using stored WCO
+            if pos_type == 'MPos':
+                for i in range(min(len(status['positions']), len(self._wco))):
+                    status['positions'][i] -= self._wco[i]
+                status['position_type'] = 'WPos'
+            else:
+                status['position_type'] = pos_type
 
         bm = _BUF_RE.search(fields_str)
         if bm:

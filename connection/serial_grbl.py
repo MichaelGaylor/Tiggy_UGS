@@ -37,6 +37,8 @@ _F_RE = re.compile(r'F:(\d+)')
 _PN_RE = re.compile(r'Pn:([A-Za-z]+)')
 # Override: Ov:feed,rapid,spindle
 _OV_RE = re.compile(r'Ov:(\d+),(\d+),(\d+)')
+# Work Coordinate Offset: WCO:x,y,z (sent periodically with MPos)
+_WCO_RE = re.compile(r'WCO:([\-\d.,]+)')
 # Accessory state: A:SFM (S=spindle CW, C=spindle CCW, F=flood, M=mist)
 _A_RE = re.compile(r'A:([A-Za-z]+)')
 
@@ -73,6 +75,7 @@ class SerialGrblConnection(ConnectionBase):
         self._grbl_response = ""
         self._send_lock = threading.Lock()
         self._response_queue: 'queue.Queue' = __import__('queue').Queue()
+        self._wco = [0.0] * 6  # Work Coordinate Offset from GRBL
         self._status_interval = 0.25  # seconds between '?' queries
 
     @property
@@ -304,8 +307,25 @@ class SerialGrblConnection(ConnectionBase):
                         status['positions'][i] = float(c)
                     except ValueError:
                         pass
-            # Tell the UI which coordinate type these are
-            status['position_type'] = pos_type
+            # Parse WCO if present (GRBL sends this periodically with MPos)
+            wco_m = _WCO_RE.search(fields_str)
+            if wco_m:
+                wco_coords = wco_m.group(1).split(',')
+                for wi, wc in enumerate(wco_coords):
+                    if wi < 6:
+                        try:
+                            self._wco[wi] = float(wc)
+                        except ValueError:
+                            pass
+
+            # If MPos, convert to WPos using stored WCO so the UI
+            # always gets work coordinates that match the G-code
+            if pos_type == 'MPos':
+                for i in range(min(len(status['positions']), len(self._wco))):
+                    status['positions'][i] -= self._wco[i]
+                status['position_type'] = 'WPos'  # now it's work coords
+            else:
+                status['position_type'] = pos_type
 
         # Parse buffer
         bm = _BUF_RE.search(fields_str)
