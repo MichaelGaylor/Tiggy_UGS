@@ -404,26 +404,34 @@ class ConnectionDialog(QDialog):
         type_layout.addRow("Type:", self.type_combo)
         layout.addWidget(type_group)
 
-        # Dynamic config area
-        self.config_group = QGroupBox("Settings")
-        self.config_layout = QFormLayout(self.config_group)
-        layout.addWidget(self.config_group)
-
-        # -- WiFi Packet widgets --
+        # -- WiFi Packet config --
+        self._wp_group = QGroupBox("WiFi Packet Settings")
+        wp_lay = QFormLayout(self._wp_group)
         self.wp_ip_edit = QLineEdit()
         self.wp_ip_edit.setPlaceholderText("IP address")
         self.wp_discover_btn = QPushButton("Discover")
         self.wp_discover_btn.clicked.connect(self._on_discover_wifi_packet)
+        wp_lay.addRow("IP Address:", self.wp_ip_edit)
+        wp_lay.addRow("", self.wp_discover_btn)
+        layout.addWidget(self._wp_group)
 
-        # -- Serial GRBL widgets --
+        # -- Serial GRBL config --
+        self._sg_group = QGroupBox("Serial GRBL Settings")
+        sg_lay = QFormLayout(self._sg_group)
         self.sg_port_combo = QComboBox()
         self.sg_baud_spin = QSpinBox()
         self.sg_baud_spin.setRange(9600, 2_000_000)
         self.sg_baud_spin.setValue(115200)
         self.sg_refresh_btn = QPushButton("Refresh")
         self.sg_refresh_btn.clicked.connect(self._refresh_serial_ports)
+        sg_lay.addRow("Port:", self.sg_port_combo)
+        sg_lay.addRow("Baud Rate:", self.sg_baud_spin)
+        sg_lay.addRow("", self.sg_refresh_btn)
+        layout.addWidget(self._sg_group)
 
-        # -- WiFi GRBL widgets --
+        # -- WiFi GRBL config --
+        self._wg_group = QGroupBox("WiFi GRBL Settings")
+        wg_lay = QFormLayout(self._wg_group)
         self.wg_ip_edit = QLineEdit()
         self.wg_ip_edit.setPlaceholderText("IP address")
         self.wg_port_spin = QSpinBox()
@@ -431,6 +439,10 @@ class ConnectionDialog(QDialog):
         self.wg_port_spin.setValue(23)
         self.wg_discover_btn = QPushButton("Discover")
         self.wg_discover_btn.clicked.connect(self._on_discover_wifi_grbl)
+        wg_lay.addRow("IP Address:", self.wg_ip_edit)
+        wg_lay.addRow("Port:", self.wg_port_spin)
+        wg_lay.addRow("", self.wg_discover_btn)
+        layout.addWidget(self._wg_group)
 
         # Restore saved connection settings
         if self._settings:
@@ -464,25 +476,12 @@ class ConnectionDialog(QDialog):
 
     # ---------- dynamic form ----------
 
-    def _clear_config_layout(self):
-        """Remove all rows from the config form."""
-        while self.config_layout.rowCount() > 0:
-            self.config_layout.removeRow(0)
-
     def _on_type_changed(self, index):
-        self._clear_config_layout()
-        if index == self.TYPE_WIFI_PACKET:
-            self.config_layout.addRow("IP Address:", self.wp_ip_edit)
-            self.config_layout.addRow("", self.wp_discover_btn)
-        elif index == self.TYPE_SERIAL_GRBL:
+        self._wp_group.setVisible(index == self.TYPE_WIFI_PACKET)
+        self._sg_group.setVisible(index == self.TYPE_SERIAL_GRBL)
+        self._wg_group.setVisible(index == self.TYPE_WIFI_GRBL)
+        if index == self.TYPE_SERIAL_GRBL:
             self._refresh_serial_ports()
-            self.config_layout.addRow("Port:", self.sg_port_combo)
-            self.config_layout.addRow("Baud Rate:", self.sg_baud_spin)
-            self.config_layout.addRow("", self.sg_refresh_btn)
-        elif index == self.TYPE_WIFI_GRBL:
-            self.config_layout.addRow("IP Address:", self.wg_ip_edit)
-            self.config_layout.addRow("Port:", self.wg_port_spin)
-            self.config_layout.addRow("", self.wg_discover_btn)
 
     # ---------- helpers ----------
 
