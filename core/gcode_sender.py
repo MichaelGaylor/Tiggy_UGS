@@ -49,6 +49,7 @@ class _SenderWorker(QObject):
     line_sent = pyqtSignal(int, str)
     completed = pyqtSignal()
     error_occurred = pyqtSignal(str)
+    io_changed = pyqtSignal(int, int, int)  # spindle_state, spindle_rpm, coolant_state
 
     def __init__(self, connection, gcode_file: GCodeFile, start_line: int,
                  feed_override_func, planner=None):
@@ -290,12 +291,16 @@ class _SenderWorker(QObject):
             # Send IO control if spindle/coolant changed (M3/M4/M5/M7/M8/M9)
             if getattr(self.planner, '_io_changed', False):
                 self.planner._io_changed = False
+                sp_dir = self.planner.spindle_dir
+                sp_rpm = int(self.planner.spindle_speed)
+                cool = self.planner.coolant_state
                 try:
                     self.connection.set_io(
-                        spindle_state=self.planner.spindle_dir,
-                        spindle_rpm=int(self.planner.spindle_speed),
-                        coolant_state=self.planner.coolant_state,
+                        spindle_state=sp_dir,
+                        spindle_rpm=sp_rpm,
+                        coolant_state=cool,
                     )
+                    self.io_changed.emit(sp_dir, sp_rpm, cool)
                 except Exception as exc:
                     logger.warning("IO control error: %s", exc)
 
@@ -376,6 +381,7 @@ class GCodeSender(QObject):
     line_sent = pyqtSignal(int, str)          # line_number, line_text
     completed = pyqtSignal()
     error_occurred = pyqtSignal(str)
+    io_changed = pyqtSignal(int, int, int)   # spindle_state, spindle_rpm, coolant
     state_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
@@ -459,6 +465,7 @@ class GCodeSender(QObject):
         self._worker.line_sent.connect(self._on_line_sent)
         self._worker.completed.connect(self._on_completed)
         self._worker.error_occurred.connect(self._on_error)
+        self._worker.io_changed.connect(self.io_changed)
 
         self._worker_thread.started.connect(self._worker.run)
         self._worker_thread.start()
