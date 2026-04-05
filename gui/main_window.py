@@ -933,12 +933,25 @@ class MainWindow(QMainWindow):
         conn_type = config.get("type", "")
         address = config.get("address", "")
 
-        # Save connection settings for next time
+        # Save connection settings for next time (use try/except because
+        # Qt may have deleted widgets for non-selected connection types)
         self.settings.setValue("conn/type", dialog.type_combo.currentIndex())
-        self.settings.setValue("conn/wp_ip", dialog.wp_ip_edit.text().strip())
-        self.settings.setValue("conn/wg_ip", dialog.wg_ip_edit.text().strip())
-        self.settings.setValue("conn/sg_baud", dialog.sg_baud_spin.value())
-        self.settings.setValue("conn/wg_port", dialog.wg_port_spin.value())
+        try:
+            self.settings.setValue("conn/wp_ip", dialog.wp_ip_edit.text().strip())
+        except RuntimeError:
+            pass
+        try:
+            self.settings.setValue("conn/wg_ip", dialog.wg_ip_edit.text().strip())
+        except RuntimeError:
+            pass
+        try:
+            self.settings.setValue("conn/sg_baud", dialog.sg_baud_spin.value())
+        except RuntimeError:
+            pass
+        try:
+            self.settings.setValue("conn/wg_port", dialog.wg_port_spin.value())
+        except RuntimeError:
+            pass
 
         if not address:
             QMessageBox.warning(self, "Error", "No address specified.")
