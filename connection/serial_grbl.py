@@ -72,6 +72,7 @@ class SerialGrblConnection(ConnectionBase):
         self._grbl_ok_event = threading.Event()
         self._grbl_response = ""
         self._send_lock = threading.Lock()
+        self._response_queue: 'queue.Queue' = __import__('queue').Queue()
         self._status_interval = 0.25  # seconds between '?' queries
 
     @property
@@ -233,13 +234,16 @@ class SerialGrblConnection(ConnectionBase):
         elif line == 'ok':
             self._grbl_response = 'ok'
             self._grbl_ok_event.set()
+            self._response_queue.put('ok')
             self.response_received.emit(line)
         elif line.startswith('error:'):
             self._grbl_response = line
             self._grbl_ok_event.set()
+            self._response_queue.put(line)
             self.error_occurred.emit(line)
             self.response_received.emit(line)
         elif line.startswith('ALARM:'):
+            self._response_queue.put(line)
             self.error_occurred.emit(line)
             self.response_received.emit(line)
         elif line.startswith('Grbl') or line.startswith('['):
@@ -383,15 +387,13 @@ class SerialGrblConnection(ConnectionBase):
         self._write_bytes(data)
 
     def read_line(self, timeout: float = 1.0) -> str | None:
-        """Read a response line from the serial buffer (non-blocking).
+        """Read a response line from the queue (thread-safe).
         Used by GCodeSender to drain 'ok' responses."""
-        if not hasattr(self, '_response_queue'):
-            self._response_queue = []
-        # Check if the reader thread has queued any responses
-        if self._grbl_ok_event.wait(timeout=timeout):
-            self._grbl_ok_event.clear()
-            return self._grbl_response
-        return None
+        import queue
+        try:
+            return self._response_queue.get(timeout=timeout)
+        except queue.Empty:
+            return None
 
     def jog(self, axis: int, direction: int, speed: float):
         """Jog using GRBL 1.1 $J command. speed in mm/min."""

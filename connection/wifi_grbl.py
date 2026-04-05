@@ -61,6 +61,7 @@ class WiFiGrblConnection(ConnectionBase):
         self._grbl_response = ""
         self._send_lock = threading.Lock()
         self._status_interval = 0.25
+        self._response_queue: 'queue.Queue' = __import__('queue').Queue()
 
     @property
     def connection_type(self) -> str:
@@ -218,13 +219,16 @@ class WiFiGrblConnection(ConnectionBase):
         elif line == 'ok':
             self._grbl_response = 'ok'
             self._grbl_ok_event.set()
+            self._response_queue.put('ok')
             self.response_received.emit(line)
         elif line.startswith('error:'):
             self._grbl_response = line
             self._grbl_ok_event.set()
+            self._response_queue.put(line)
             self.error_occurred.emit(line)
             self.response_received.emit(line)
         elif line.startswith('ALARM:'):
+            self._response_queue.put(line)
             self.error_occurred.emit(line)
             self.response_received.emit(line)
         elif line.startswith('Grbl') or line.startswith('['):
@@ -362,10 +366,13 @@ class WiFiGrblConnection(ConnectionBase):
                 self.error_occurred.emit(f"Send error: {exc}")
 
     def read_line(self, timeout: float = 1.0) -> str | None:
-        """Read a response line (used by GCodeSender to drain 'ok' responses)."""
-        if self._grbl_ok_event.wait(timeout=timeout):
-            self._grbl_ok_event.clear()
-            return self._grbl_response
+        """Read a response line from the queue (thread-safe).
+        Used by GCodeSender to drain 'ok' responses."""
+        import queue
+        try:
+            return self._response_queue.get(timeout=timeout)
+        except queue.Empty:
+            return None
         return None
 
     def jog(self, axis: int, direction: int, speed: float):
