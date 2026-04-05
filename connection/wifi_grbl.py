@@ -118,6 +118,20 @@ class WiFiGrblConnection(ConnectionBase):
             self.connected.emit(device_info)
             self.response_received.emit(f"Connected to {address}:{port}")
 
+        except socket.timeout:
+            log.warning("WiFi GRBL connect timeout to %s:%d", address, port)
+            if self._sock is not None:
+                try:
+                    self._sock.close()
+                except Exception:
+                    pass
+                self._sock = None
+            self._running = False
+            self.state = ConnectionState.DISCONNECTED
+            self.error_occurred.emit(
+                f"WiFi GRBL connect timed out ({address}:{port}). "
+                f"Check: Is the ESP32 running? Is port {port} enabled in firmware? "
+                f"Is another connection (serial/WiFi Packet) already active?")
         except Exception as exc:
             log.exception("WiFi GRBL connect failed")
             if self._sock is not None:
