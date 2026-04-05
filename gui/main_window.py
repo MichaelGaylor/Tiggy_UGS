@@ -891,7 +891,6 @@ class MainWindow(QMainWindow):
         self.gcode_sender.completed.connect(self._on_send_completed)
         self.gcode_sender.error_occurred.connect(self.console_widget.append_error)
         self.gcode_sender.state_changed.connect(self._on_sender_state_changed)
-        self.gcode_sender.io_changed.connect(self.control_widget.update_io_state)
 
     # ================================================================
     # Connection signal management
@@ -1075,14 +1074,12 @@ class MainWindow(QMainWindow):
         alarm = status.get("alarm_code", 0)
         self.control_widget.update_state(state_str, alarm)
 
-        # Update spindle/coolant display from status reports,
-        # but only if the ESP32 is actually reporting non-zero values.
-        # Some firmware versions don't echo spindle state back in status.
-        sp = status.get("spindle_state", 0)
-        rpm = status.get("spindle_rpm", 0)
-        cool = status.get("coolant_state", 0)
-        if sp or rpm or cool:
-            self.control_widget.update_io_state(sp, rpm, cool)
+        # Update spindle/coolant display from actual controller state
+        self.control_widget.update_io_state(
+            status.get("spindle_state", 0),
+            status.get("spindle_rpm", 0),
+            status.get("coolant_state", 0),
+        )
 
     # ================================================================
     # Event handlers - file
